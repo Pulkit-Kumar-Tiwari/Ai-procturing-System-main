@@ -13,7 +13,7 @@ The Node.js/Express backend serves the frontend and persists exam catalogs, live
 
 ## Deploy on Vercel
 
-Vercel runs the API as a serverless function and does not provide durable storage for `data/backend.json`. Create a Neon Postgres database, copy its pooled connection string, then add it to the Vercel project's environment variables as `DATABASE_URL` for every environment you deploy. Redeploy after saving the variable. The API creates its tables automatically on first use; verify the deployment by opening `/api/health` and confirming it returns `{"ok":true}`. If it reports that `DATABASE_URL` is missing, add the variable to the right Vercel environment and redeploy.
+Vercel routes `/api/*` requests through the shared serverless API function using `vercel.json`; it does not provide durable storage for `data/backend.json`. Create a Neon Postgres database, copy its pooled connection string, then add it to the Vercel project's environment variables as `DATABASE_URL` for every environment you deploy. Redeploy after saving the variable. The API creates its tables automatically on first use; verify the deployment by opening `/api/health` and confirming it returns `{"ok":true}`. If it reports that `DATABASE_URL` is missing, add the variable to the right Vercel environment and redeploy.
 
 The app's frontend and API must use the same Vercel deployment origin. For live video across separate networks, configure TURN using Vercel environment variables as described below; the default STUN server is not sufficient on every network.
 
