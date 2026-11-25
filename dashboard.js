@@ -143,20 +143,35 @@ function renderWatchPanel(c) {
     : canWatch
       ? "Watch live"
       : "Not available yet";
-  return `<section class="watch-panel mt-5" aria-label="Live candidate video"><div class="watch-header"><div><h2 class="font-bold">Candidate video</h2><p class="mut text-sm" data-watch-status>${escapeHTML(status)}</p></div><span class="watch-indicator ${connected ? "watching" : ""}" aria-hidden="true"></span></div><div class="watch-video-wrap"><video id="watchVideo" autoplay muted playsinline aria-label="Candidate live camera video" hidden></video><p class="watch-placeholder">${allowed ? "Video is off until you start watching." : "The candidate must allow video sharing first."}</p></div><button class="btn ${connected ? "" : "btn-p"} mt-3" type="button" data-watch-session="${escapeHTML(c.sessionId)}" ${!connected && !canWatch ? "disabled" : ""}>${action}</button><p class="mut text-xs mt-2">Live peer-to-peer video requires the candidate’s consent. The backend handles connection signaling; video is not recorded or uploaded.</p></section>`;
+  return `<section class="watch-panel mt-5" aria-label="Live candidate video"><div class="watch-header"><div><h2 class="font-bold">Candidate video</h2><p class="mut text-sm" data-watch-status>${escapeHTML(status)}</p></div><span class="watch-indicator ${connected ? "watching" : ""}" aria-hidden="true"></span></div><div class="watch-video-wrap"><video id="watchVideo" autoplay muted playsinline controls aria-label="Candidate live camera video" hidden></video><p class="watch-placeholder">${allowed ? "Video is off until you start watching." : "The candidate must allow video sharing first."}</p></div><button class="btn ${connected ? "" : "btn-p"} mt-3" type="button" data-watch-session="${escapeHTML(c.sessionId)}" ${!connected && !canWatch ? "disabled" : ""}>${action}</button><p class="mut text-xs mt-2">Live peer-to-peer video requires the candidate’s consent. The backend handles connection signaling; video is not recorded or uploaded.</p></section>`;
 }
 function attachWatchVideo() {
   const video = $("#watchVideo");
   if (!video || !watchRemoteStream) return;
-  video.srcObject = watchRemoteStream;
+  if (video.srcObject !== watchRemoteStream)
+    video.srcObject = watchRemoteStream;
   video.hidden = false;
   const placeholder = video.parentElement.querySelector(".watch-placeholder");
   if (placeholder) placeholder.hidden = true;
-  video
-    .play()
-    .catch((error) =>
-      toast(`Live video playback could not start: ${error.message}`, "bad"),
-    );
+  video.onplaying = () => {
+    const status = video.closest(".watch-panel")?.querySelector("[data-watch-status]");
+    if (status) status.textContent = "Live video from this browser";
+  };
+  video.onwaiting = () => {
+    const status = video.closest(".watch-panel")?.querySelector("[data-watch-status]");
+    if (status) status.textContent = "Video connected; waiting for the next frame…";
+  };
+  if (video.paused)
+    video.play().catch((error) => {
+      if (error.name === "AbortError") return;
+      const status = video.closest(".watch-panel")?.querySelector("[data-watch-status]");
+      if (error.name === "NotAllowedError") {
+        if (status) status.textContent = "Press play on the video to start playback.";
+        return;
+      }
+      if (status) status.textContent = `Playback failed: ${error.message}`;
+      toast(`Live video playback could not start: ${error.message}`, "bad");
+    });
 }
 function stopWatching(sessionId = watchSessionId) {
   const id = watchRequestId,
@@ -214,7 +229,11 @@ async function startWatching(sessionId) {
     watchRemoteStream = new MediaStream();
     peer.addTransceiver("video", { direction: "recvonly" });
     peer.ontrack = (event) => {
-      watchRemoteStream = event.streams[0] || new MediaStream([event.track]);
+      if (event.streams[0]) {
+        watchRemoteStream = event.streams[0];
+      } else if (!watchRemoteStream.getTracks().includes(event.track)) {
+        watchRemoteStream.addTrack(event.track);
+      }
       attachWatchVideo();
     };
     peer.addEventListener("connectionstatechange", () => {
