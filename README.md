@@ -11,6 +11,12 @@ Open the `http://localhost:3000` URL printed by the server on the computer runni
 
 The Node.js/Express backend serves the frontend and persists exam catalogs, live session status, and submitted answers in `data/backend.json`. Open the same server origin on the examiner and candidate devices; do not open the HTML files directly. Browsers only allow camera access on `localhost` or a secure HTTPS origin, so a LAN URL using HTTP is enough to check backend access but not candidate camera access. For live exams on other devices, serve the app through a trusted HTTPS reverse proxy or hosting provider.
 
+## Deploy on Vercel
+
+Vercel runs the API as a serverless function and does not provide durable storage for `data/backend.json`. Create a Neon Postgres database, copy its pooled connection string, then add it to the Vercel project's environment variables as `DATABASE_URL` for every environment you deploy. Redeploy after saving the variable. The API creates its tables automatically on first use; verify the deployment by opening `/api/health` and confirming it returns `{"ok":true}`. If it reports that `DATABASE_URL` is missing, add the variable to the right Vercel environment and redeploy.
+
+The app's frontend and API must use the same Vercel deployment origin. For live video across separate networks, configure TURN using Vercel environment variables as described below; the default STUN server is not sufficient on every network.
+
 ## Live video across devices
 
 Live video is WebRTC peer-to-peer: the backend exchanges connection offers and answers, but does not receive, record, or store the camera stream. Candidate consent is required and sharing can be stopped at any time. The server provides a public STUN server by default. STUN alone does not work on every network; when devices are on different networks or behind restrictive firewalls, configure a TURN relay on the backend:

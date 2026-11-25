@@ -253,13 +253,22 @@ const liveSessions = (() => {
     backendWarningShown = true;
     toast(`Backend sync failed: ${error.message}`, "bad");
   }
+  async function checkResponse(response) {
+    if (response.ok) return;
+    let message = `HTTP ${response.status}`;
+    if (response.headers.get("content-type")?.includes("application/json")) {
+      const body = await response.json();
+      if (typeof body.error === "string") message = body.error;
+    }
+    throw new Error(message);
+  }
   async function syncFromServer() {
     if (syncInFlight) return;
     syncInFlight = true;
     const requestVersion = localMutationVersion;
     try {
       const response = await fetch("/api/sessions");
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await checkResponse(response);
       const remote = await response.json();
       if (!remote || typeof remote !== "object" || Array.isArray(remote))
         throw new Error("The server returned invalid session data.");
@@ -285,7 +294,7 @@ const liveSessions = (() => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await checkResponse(response);
       backendWarningShown = false;
     } catch (error) {
       showBackendWarning(error);
