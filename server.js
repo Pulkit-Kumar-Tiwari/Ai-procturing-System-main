@@ -10,8 +10,6 @@ const dataFile = path.join(dataDir, "backend.json");
 let sql;
 let databaseReady;
 
-fs.mkdirSync(dataDir, { recursive: true });
-
 const defaultExam = {
   id: "EX-2026",
   name: "Fundamentals of Computing",
@@ -32,6 +30,7 @@ function readData() {
 }
 
 function writeData(data) {
+  fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
 }
 
@@ -85,6 +84,18 @@ async function getDatabase() {
 }
 
 app.use(express.json({ limit: "1mb" }));
+
+app.use((req, res, next) => {
+  if (req.path !== "/api/index") return next();
+
+  const requestUrl = new URL(req.originalUrl, "http://localhost");
+  const apiPath = requestUrl.searchParams.get("path");
+  if (!apiPath) return next();
+
+  requestUrl.searchParams.delete("path");
+  req.url = `/api/${apiPath}${requestUrl.search}`;
+  next();
+});
 
 app.get("/api/health", async (req, res) => {
   const database = await getDatabase();
