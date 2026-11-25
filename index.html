@@ -339,17 +339,6 @@
     <script src="mockData.js"></script>
     <script src="main.js"></script>
     <script>
-      const rules = {
-        name: (v) => (v.trim() ? "" : "Enter your full name."),
-        exam: (v) =>
-          examCatalog.find(v)
-            ? ""
-            : "Enter a test ID created by your examiner.",
-        code: (v) =>
-          examCatalog.authorize($("#exam").value, $("#name").value, v)
-            ? ""
-            : "The test ID, student name, and individual access code do not match.",
-      };
       $("#toggleCode").addEventListener("click", (e) => {
         const input = $("#code"),
           visible = input.type === "password";
@@ -361,26 +350,48 @@
         );
         e.currentTarget.setAttribute("aria-pressed", visible);
       });
-      $("#accessForm").addEventListener("submit", (e) => {
+      $("#accessForm").addEventListener("submit", async (e) => {
         e.preventDefault();
-        let first = null;
-        for (const k in rules) {
-          const el = $("#" + k),
-            m = rules[k](el.value);
-          $("#e-" + k).textContent = m;
-          el.setAttribute("aria-invalid", !!m);
-          if (m && !first) first = el;
+        const name = $("#name"),
+          exam = $("#exam"),
+          code = $("#code"),
+          submit = $('#accessForm button[type="submit"]');
+        $("#e-name").textContent = name.value.trim() ? "" : "Enter your full name.";
+        name.setAttribute("aria-invalid", !name.value.trim());
+        $("#e-exam").textContent = "";
+        $("#e-code").textContent = "";
+        if (!name.value.trim()) return name.focus();
+        submit.disabled = true;
+        try {
+          const examDetails = await examCatalog.authorize(
+            exam.value,
+            name.value,
+            code.value,
+          );
+          if (!examDetails) {
+            $("#e-code").textContent =
+              "The test ID, student name, and individual access code do not match.";
+            code.setAttribute("aria-invalid", "true");
+            return code.focus();
+          }
+          sessionStorage.setItem(
+            "candidate-exam",
+            JSON.stringify(examDetails),
+          );
+          sessionStorage.setItem(
+            "candidate",
+            JSON.stringify({
+              name: name.value.trim(),
+              exam: exam.value.trim().toUpperCase(),
+              accessGranted: true,
+            }),
+          );
+          location.href = "exam.html";
+        } catch (error) {
+          $("#e-code").textContent = `Could not verify access: ${error.message}`;
+        } finally {
+          submit.disabled = false;
         }
-        if (first) return first.focus();
-        sessionStorage.setItem(
-          "candidate",
-          JSON.stringify({
-            name: $("#name").value.trim(),
-            exam: $("#exam").value.trim().toUpperCase(),
-            accessGranted: true,
-          }),
-        );
-        location.href = "exam.html";
       });
     </script>
   </body>

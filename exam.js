@@ -1,8 +1,12 @@
 const user = JSON.parse(sessionStorage.getItem("candidate") || "{}");
-const examDetails = examCatalog.find(user.exam);
+const examDetails = JSON.parse(sessionStorage.getItem("candidate-exam") || "null");
 if (!examDetails || !user.accessGranted) {
   location.replace("index.html#access");
   throw new Error("Open an assessment using your individual invitation.");
+}
+if (examDetails.id !== user.exam) {
+  location.replace("index.html#access");
+  throw new Error("The assessment does not match the candidate invitation.");
 }
 const questionSet = examDetails.questions;
 user.sessionId =

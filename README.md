@@ -13,7 +13,7 @@ The Node.js/Express backend serves the frontend and persists exam catalogs, live
 
 ## Deploy on Vercel
 
-Vercel routes `/api/*` requests through the shared serverless API function using `vercel.json`; it does not provide durable storage for `data/backend.json`. Create a Neon Postgres database, copy its pooled connection string, then add it to the Vercel project's environment variables as `DATABASE_URL` for every environment you deploy. Redeploy after saving the variable. The API creates its tables automatically on first use; verify the deployment by opening `/api/health` and confirming it returns `{"ok":true}`. If it reports that `DATABASE_URL` is missing, add the variable to the right Vercel environment and redeploy.
+Vercel routes `/api/*` requests through the shared serverless API function using `vercel.json`; it does not provide durable storage for `data/backend.json`. Create a Neon Postgres database, copy its pooled connection string, then add it to the Vercel project's environment variables as `DATABASE_URL` for every environment you deploy. Redeploy after saving the variable. The API creates its tables automatically on first use; verify the deployment by opening `/api/health` and confirming it returns `{"ok":true}`. Tests, candidate invitations, live sessions, and exam results are stored in Neon so candidates and examiners on separate devices can share them. If health reports that `DATABASE_URL` is missing, add the variable to the right Vercel environment and redeploy.
 
 The app's frontend and API must use the same Vercel deployment origin. For live video across separate networks, configure TURN using Vercel environment variables as described below; the default STUN server is not sufficient on every network.
 
@@ -36,6 +36,7 @@ npm start
 - `GET /api/rtc-config` — STUN/TURN configuration for WebRTC
 - `GET /api/exams` — list exams
 - `POST /api/exams` — create an exam
+- `POST /api/access` — verify a candidate invitation and return that exam's questions
 - `GET /api/sessions` — list live sessions
 - `PUT /api/sessions/:id` — update a live session
 - `POST /api/submissions` — save an exam submission

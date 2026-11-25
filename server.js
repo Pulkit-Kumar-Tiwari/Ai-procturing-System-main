@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -56,8 +57,18 @@ async function getDatabase() {
         CREATE TABLE IF NOT EXISTS verity_exams (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
-          duration_seconds INTEGER NOT NULL
+          duration_seconds INTEGER NOT NULL,
+          questions JSONB NOT NULL DEFAULT '[]'::jsonb,
+          assignments JSONB NOT NULL DEFAULT '[]'::jsonb
         )
+      `;
+      await sql`
+        ALTER TABLE verity_exams
+        ADD COLUMN IF NOT EXISTS questions JSONB NOT NULL DEFAULT '[]'::jsonb
+      `;
+      await sql`
+        ALTER TABLE verity_exams
+        ADD COLUMN IF NOT EXISTS assignments JSONB NOT NULL DEFAULT '[]'::jsonb
       `;
       await sql`
         CREATE TABLE IF NOT EXISTS verity_sessions (
@@ -149,8 +160,47 @@ app.get("/api/exams", async (req, res) => {
 app.post("/api/exams", async (req, res) => {
   const name = String(req.body.name || "").trim();
   const minutes = Number(req.body.minutes);
-  if (!name || !Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
-    return res.status(400).json({ error: "A test name and duration from 1 to 240 minutes are required." });
+  const questions = req.body.questions,
+    candidateNames = Array.isArray(req.body.candidateNames)
+      ? req.body.candidateNames
+          .map((candidate) => String(candidate || "").trim())
+          .filter(Boolean)
+      : [],
+    uniqueNames = new Set(candidateNames.map((candidate) => candidate.toLocaleLowerCase())),
+    validQuestions =
+      Array.isArray(questions) &&
+      questions.length > 0 &&
+      questions.length <= 50 &&
+      questions.every(
+        (question) =>
+          question &&
+          typeof question.q === "string" &&
+          question.q.trim() &&
+          Array.isArray(question.o) &&
+          question.o.length >= 2 &&
+          question.o.length <= 4 &&
+          question.o.every(
+            (option) => typeof option === "string" && option.trim(),
+          ) &&
+          Number.isInteger(question.answer) &&
+          question.answer >= 0 &&
+          question.answer < question.o.length,
+      );
+  if (
+    !name ||
+    name.length > 200 ||
+    !Number.isInteger(minutes) ||
+    minutes < 1 ||
+    minutes > 240 ||
+    !validQuestions ||
+    !candidateNames.length ||
+    candidateNames.length !== uniqueNames.size ||
+    candidateNames.some((candidate) => candidate.length > 100)
+  ) {
+    return res.status(400).json({
+      error:
+        "Provide a test name, a duration from 1 to 240 minutes, valid questions, and unique assigned candidate names.",
+    });
   }
 
   const database = await getDatabase();
@@ -163,17 +213,80 @@ app.post("/api/exams", async (req, res) => {
     id = `EX-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
   } while (exams?.some((exam) => exam.id === id));
 
-  const exam = { id, name, durationSeconds: minutes * 60 };
+  const assignments = candidateNames.map((candidate) => ({
+    name: candidate,
+    accessCode: Array.from(
+      { length: 8 },
+      () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[crypto.randomInt(32)],
+    ).join(""),
+  }));
+  const exam = {
+    id,
+    name,
+    durationSeconds: minutes * 60,
+    questions: questions.map((question) => ({
+      q: question.q.trim(),
+      o: question.o.map((option) => option.trim()),
+      answer: question.answer,
+    })),
+    assignments,
+  };
   if (database) {
     await database`
-      INSERT INTO verity_exams (id, name, duration_seconds)
-      VALUES (${exam.id}, ${exam.name}, ${exam.durationSeconds})
+      INSERT INTO verity_exams (id, name, duration_seconds, questions, assignments)
+      VALUES (
+        ${exam.id},
+        ${exam.name},
+        ${exam.durationSeconds},
+        ${JSON.stringify(exam.questions)}::jsonb,
+        ${JSON.stringify(exam.assignments)}::jsonb
+      )
     `;
   } else {
     data.exams = [...data.exams.filter((existing) => existing.id !== defaultExam.id), exam];
     writeData(data);
   }
   res.status(201).json(exam);
+});
+
+app.post("/api/access", async (req, res) => {
+  const id = String(req.body.id || "").trim().toUpperCase(),
+    candidateName = String(req.body.candidateName || "").trim().toLocaleLowerCase(),
+    accessCode = String(req.body.accessCode || "").trim().toUpperCase();
+  if (!id || !candidateName || !accessCode)
+    return res.status(400).json({ error: "Test ID, candidate name, and access code are required." });
+
+  const database = await getDatabase();
+  let exam;
+  if (database) {
+    const [row] = await database`
+      SELECT id, name, duration_seconds, questions, assignments
+      FROM verity_exams
+      WHERE upper(id) = ${id}
+    `;
+    if (row) {
+      exam = {
+        id: row.id,
+        name: row.name,
+        durationSeconds: row.duration_seconds,
+        questions: row.questions,
+        assignments: row.assignments,
+      };
+    }
+  } else {
+    exam = readData().exams.find((item) => item.id.toUpperCase() === id);
+  }
+
+  const assignment = exam?.assignments?.find(
+    (item) =>
+      item.name.toLocaleLowerCase() === candidateName &&
+      item.accessCode === accessCode,
+  );
+  if (!assignment)
+    return res.status(401).json({ error: "The test ID, candidate name, and access code do not match." });
+
+  const { assignments, ...candidateExam } = exam;
+  res.json({ exam: candidateExam });
 });
 
 app.get("/api/sessions", async (req, res) => {

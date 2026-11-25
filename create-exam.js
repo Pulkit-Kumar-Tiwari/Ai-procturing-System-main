@@ -43,7 +43,7 @@ $("#questionList").addEventListener("click", (event) => {
     question.querySelector("legend").textContent = `Question ${number + 1}`;
   });
 });
-$("#createTestForm").addEventListener("submit", (event) => {
+$("#createTestForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = $("#testName").value.trim(),
     minutes = Number($("#testDuration").value),
@@ -83,10 +83,12 @@ $("#createTestForm").addEventListener("submit", (event) => {
     message.className = "err mt-3";
     return;
   }
-  const test = examCatalog.create(name, minutes, questions, candidateNames);
-  if (!test) {
+  let test;
+  try {
+    test = await examCatalog.create(name, minutes, questions, candidateNames);
+  } catch (error) {
     message.textContent =
-      "The test could not be saved. Check browser storage, then try again.";
+      `The test could not be saved: ${error.message}`;
     message.className = "err mt-3";
     return;
   }

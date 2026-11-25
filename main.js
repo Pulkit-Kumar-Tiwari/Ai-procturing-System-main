@@ -22,132 +22,31 @@ const tone = (s) =>
       ? { c: "warn", label: "Review sample" }
       : { c: "bad", label: "Weak sample" };
 const examCatalog = (() => {
-  const key = "verity-exam-catalog-v1";
-  function read() {
-    let stored = [];
-    try {
-      const value = JSON.parse(localStorage.getItem(key) || "[]");
-      if (Array.isArray(value))
-        stored = value.filter(
-          (exam) =>
-            exam &&
-            typeof exam.id === "string" &&
-            typeof exam.name === "string" &&
-            Number.isInteger(exam.durationSeconds) &&
-            exam.durationSeconds > 0,
-        );
-    } catch (error) {
-      toast(`Tests could not be loaded: ${error.message}`, "bad");
+  async function create(name, minutes, questions, candidateNames) {
+    const response = await fetch("/api/exams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, minutes, questions, candidateNames }),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw new Error(result.error || `Test creation failed (HTTP ${response.status}).`);
+    return result;
+  }
+  async function authorize(id, candidateName, accessCode) {
+    const response = await fetch("/api/access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, candidateName, accessCode }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      if (response.status === 401) return null;
+      throw new Error(result.error || `Access check failed (HTTP ${response.status}).`);
     }
-    return stored.filter(
-      (exam) =>
-        exam.id.toUpperCase() !== "EX-2026" &&
-        Array.isArray(exam.questions) &&
-        exam.questions.length > 0 &&
-        Array.isArray(exam.assignments) &&
-        exam.assignments.length > 0,
-    );
+    return result.exam;
   }
-  function find(id) {
-    return (
-      read().find(
-        (exam) =>
-          exam.id.toUpperCase() ===
-          String(id || "")
-            .trim()
-            .toUpperCase(),
-      ) || null
-    );
-  }
-  function create(name, minutes, questions, candidateNames) {
-    const exams = read(),
-      normalizedName = String(name || "").trim(),
-      durationSeconds = Math.round(Number(minutes) * 60),
-      validQuestions =
-        Array.isArray(questions) &&
-        questions.length > 0 &&
-        questions.length <= 50 &&
-        questions.every(
-          (question) =>
-            question &&
-            typeof question.q === "string" &&
-            question.q.trim() &&
-            Array.isArray(question.o) &&
-            question.o.length >= 2 &&
-            question.o.every(
-              (option) => typeof option === "string" && option.trim(),
-            ) &&
-            Number.isInteger(question.answer) &&
-            question.answer >= 0 &&
-            question.answer < question.o.length,
-        ),
-      names = Array.isArray(candidateNames)
-        ? candidateNames
-            .map((candidate) => String(candidate || "").trim())
-            .filter(Boolean)
-        : [],
-      uniqueNames = new Set(names.map((candidate) => candidate.toLocaleLowerCase()));
-    if (
-      !normalizedName ||
-      !Number.isInteger(durationSeconds) ||
-      durationSeconds < 60 ||
-      durationSeconds > 4 * 60 * 60 ||
-      !validQuestions ||
-      !names.length ||
-      names.length !== uniqueNames.size ||
-      names.some((candidate) => candidate.length > 100)
-    )
-      return null;
-    let id;
-    do {
-      id = `EX-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-    } while (exams.some((exam) => exam.id === id));
-    const assignments = names.map((candidate) => ({
-      name: candidate,
-      accessCode: Array.from(
-        { length: 8 },
-        () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)],
-      ).join(""),
-    }));
-    const exam = {
-      id,
-      name: normalizedName,
-      durationSeconds,
-      questions: questions.map((question) => ({
-        q: question.q.trim(),
-        o: question.o.map((option) => option.trim()),
-        answer: question.answer,
-      })),
-      assignments,
-    };
-    try {
-      localStorage.setItem(
-        key,
-        JSON.stringify([
-          ...exams,
-          exam,
-        ]),
-      );
-      return exam;
-    } catch (error) {
-      toast(`Test could not be saved: ${error.message}`, "bad");
-      return null;
-    }
-  }
-  function authorize(id, candidateName, accessCode) {
-    const exam = find(id);
-    if (!exam || !Array.isArray(exam.assignments)) return false;
-    return (
-      Array.isArray(exam.assignments) &&
-      exam.assignments.some(
-        (assignment) =>
-          assignment.name.toLocaleLowerCase() ===
-            String(candidateName || "").trim().toLocaleLowerCase() &&
-          assignment.accessCode === String(accessCode || "").trim().toUpperCase(),
-      )
-    );
-  }
-  return { read, find, create, authorize };
+  return { create, authorize };
 })();
 function ring(s, size = 72, label = "Sample score", color = tone(s).c) {
   const score = Math.max(0, Math.min(100, Math.round(Number(s) || 0))),
