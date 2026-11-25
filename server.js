@@ -311,14 +311,16 @@ app.put("/api/sessions/:id", async (req, res) => {
   const database = await getDatabase();
   if (database) {
     const updatedAt = Date.now();
+    const payload = {
+      ...req.body,
+      sessionId: id,
+      updatedAt,
+    };
     const [session] = await database`
       INSERT INTO verity_sessions (session_id, payload, updated_at)
       VALUES (
         ${id},
-        ${JSON.stringify(req.body)}::jsonb || jsonb_build_object(
-          'sessionId', ${id},
-          'updatedAt', ${updatedAt}
-        ),
+        ${JSON.stringify(payload)}::jsonb,
         ${updatedAt}
       )
       ON CONFLICT (session_id) DO UPDATE SET
