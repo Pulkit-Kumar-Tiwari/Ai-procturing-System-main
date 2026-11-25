@@ -337,9 +337,27 @@ const liveSessions = (() => {
 })();
 
 async function getRtcConfiguration() {
-  const response = await fetch("/api/rtc-config");
-  if (!response.ok) throw new Error(`RTC configuration unavailable (HTTP ${response.status})`);
-  const configuration = await response.json();
+  let response;
+  try {
+    response = await fetch("/api/rtc-config");
+  } catch (error) {
+    throw new Error(
+      `Could not reach the RTC configuration endpoint. Open this app from the running backend URL. ${error.message}`,
+    );
+  }
+  let configuration;
+  try {
+    configuration = await response.json();
+  } catch (error) {
+    throw new Error(
+      `The RTC configuration endpoint returned invalid JSON (HTTP ${response.status}). ${error.message}`,
+    );
+  }
+  if (!response.ok)
+    throw new Error(
+      configuration.error ||
+        `RTC configuration unavailable (HTTP ${response.status})`,
+    );
   if (!Array.isArray(configuration.iceServers))
     throw new Error("The server returned invalid RTC configuration.");
   return { iceServers: configuration.iceServers };

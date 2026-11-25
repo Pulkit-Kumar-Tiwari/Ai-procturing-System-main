@@ -1,5 +1,6 @@
 const express = require("express");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const app = express();
@@ -125,6 +126,14 @@ app.post("/api/submissions", (req, res) => {
 
 app.use(express.static(__dirname, { extensions: ["html"] }));
 
-app.listen(port, () => {
+app.listen(port, "0.0.0.0", () => {
   console.log(`Verity is running at http://localhost:${port}`);
+  const addresses = Object.values(os.networkInterfaces())
+    .flat()
+    .filter((address) => address && address.family === "IPv4" && !address.internal)
+    .map((address) => address.address);
+  addresses.forEach((address) => {
+    console.log(`LAN access: http://${address}:${port}`);
+  });
+  console.log("Camera access from other devices requires HTTPS.");
 });

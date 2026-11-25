@@ -7,13 +7,13 @@ npm install
 npm start
 ```
 
-Open `http://localhost:3000`.
+Open the `http://localhost:3000` URL printed by the server on the computer running it. The server listens on all network interfaces and also prints LAN URLs; another device on the same network can use one of those URLs to reach the app and backend. Allow Node.js through the computer's firewall on the selected network if prompted.
 
-The Node.js/Express backend serves the frontend and persists exam catalogs, live session status, and submitted answers in `data/backend.json`. For multiple devices, make the server reachable to both devices and open the same server URL on each. The example server uses HTTP; use a trusted HTTPS reverse proxy for deployed use (camera access on other devices requires a secure context).
+The Node.js/Express backend serves the frontend and persists exam catalogs, live session status, and submitted answers in `data/backend.json`. Open the same server origin on the examiner and candidate devices; do not open the HTML files directly. Browsers only allow camera access on `localhost` or a secure HTTPS origin, so a LAN URL using HTTP is enough to check backend access but not candidate camera access. For live exams on other devices, serve the app through a trusted HTTPS reverse proxy or hosting provider.
 
 ## Live video across devices
 
-Live video is WebRTC peer-to-peer: the backend exchanges connection offers and answers, but does not receive, record, or store the camera stream. Candidate consent is required and sharing can be stopped at any time. The server provides a public STUN server by default. Some network and firewall combinations require a TURN relay for connectivity; configure a TURN service using environment variables:
+Live video is WebRTC peer-to-peer: the backend exchanges connection offers and answers, but does not receive, record, or store the camera stream. Candidate consent is required and sharing can be stopped at any time. The server provides a public STUN server by default. STUN alone does not work on every network; when devices are on different networks or behind restrictive firewalls, configure a TURN relay on the backend:
 
 ```powershell
 $env:TURN_URL = "turn:turn.example.com:3478"
