@@ -22,12 +22,7 @@ const tone = (s) =>
       ? { c: "warn", label: "Review sample" }
       : { c: "bad", label: "Weak sample" };
 const examCatalog = (() => {
-  const key = "verity-exam-catalog-v1",
-    defaultExam = {
-      id: "EX-2026",
-      name: "Fundamentals of Computing",
-      durationSeconds: 30 * 60,
-    };
+  const key = "verity-exam-catalog-v1";
   function read() {
     let stored = [];
     try {
@@ -44,10 +39,14 @@ const examCatalog = (() => {
     } catch (error) {
       toast(`Tests could not be loaded: ${error.message}`, "bad");
     }
-    return [
-      defaultExam,
-      ...stored.filter((exam) => exam.id.toUpperCase() !== defaultExam.id),
-    ];
+    return stored.filter(
+      (exam) =>
+        exam.id.toUpperCase() !== "EX-2026" &&
+        Array.isArray(exam.questions) &&
+        exam.questions.length > 0 &&
+        Array.isArray(exam.assignments) &&
+        exam.assignments.length > 0,
+    );
   }
   function find(id) {
     return (
@@ -60,27 +59,72 @@ const examCatalog = (() => {
       ) || null
     );
   }
-  function create(name, minutes) {
+  function create(name, minutes, questions, candidateNames) {
     const exams = read(),
       normalizedName = String(name || "").trim(),
-      durationSeconds = Math.round(Number(minutes) * 60);
+      durationSeconds = Math.round(Number(minutes) * 60),
+      validQuestions =
+        Array.isArray(questions) &&
+        questions.length > 0 &&
+        questions.length <= 50 &&
+        questions.every(
+          (question) =>
+            question &&
+            typeof question.q === "string" &&
+            question.q.trim() &&
+            Array.isArray(question.o) &&
+            question.o.length >= 2 &&
+            question.o.every(
+              (option) => typeof option === "string" && option.trim(),
+            ) &&
+            Number.isInteger(question.answer) &&
+            question.answer >= 0 &&
+            question.answer < question.o.length,
+        ),
+      names = Array.isArray(candidateNames)
+        ? candidateNames
+            .map((candidate) => String(candidate || "").trim())
+            .filter(Boolean)
+        : [],
+      uniqueNames = new Set(names.map((candidate) => candidate.toLocaleLowerCase()));
     if (
       !normalizedName ||
       !Number.isInteger(durationSeconds) ||
       durationSeconds < 60 ||
-      durationSeconds > 4 * 60 * 60
+      durationSeconds > 4 * 60 * 60 ||
+      !validQuestions ||
+      !names.length ||
+      names.length !== uniqueNames.size ||
+      names.some((candidate) => candidate.length > 100)
     )
       return null;
     let id;
     do {
       id = `EX-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
     } while (exams.some((exam) => exam.id === id));
-    const exam = { id, name: normalizedName, durationSeconds };
+    const assignments = names.map((candidate) => ({
+      name: candidate,
+      accessCode: Array.from(
+        { length: 8 },
+        () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)],
+      ).join(""),
+    }));
+    const exam = {
+      id,
+      name: normalizedName,
+      durationSeconds,
+      questions: questions.map((question) => ({
+        q: question.q.trim(),
+        o: question.o.map((option) => option.trim()),
+        answer: question.answer,
+      })),
+      assignments,
+    };
     try {
       localStorage.setItem(
         key,
         JSON.stringify([
-          ...exams.filter((existing) => existing.id !== defaultExam.id),
+          ...exams,
           exam,
         ]),
       );
@@ -90,7 +134,20 @@ const examCatalog = (() => {
       return null;
     }
   }
-  return { read, find, create };
+  function authorize(id, candidateName, accessCode) {
+    const exam = find(id);
+    if (!exam || !Array.isArray(exam.assignments)) return false;
+    return (
+      Array.isArray(exam.assignments) &&
+      exam.assignments.some(
+        (assignment) =>
+          assignment.name.toLocaleLowerCase() ===
+            String(candidateName || "").trim().toLocaleLowerCase() &&
+          assignment.accessCode === String(accessCode || "").trim().toUpperCase(),
+      )
+    );
+  }
+  return { read, find, create, authorize };
 })();
 function ring(s, size = 72, label = "Sample score", color = tone(s).c) {
   const score = Math.max(0, Math.min(100, Math.round(Number(s) || 0))),
@@ -172,6 +229,10 @@ const liveSessions = (() => {
         ? null
         : new BroadcastChannel(key),
     listeners = new Set();
+  let syncTimer = null,
+    syncInFlight = false,
+    backendWarningShown = false,
+    localMutationVersion = 0;
   function read() {
     try {
       const value = JSON.parse(localStorage.getItem(key) || "{}");
@@ -187,10 +248,54 @@ const liveSessions = (() => {
     const sessions = read();
     listeners.forEach((listener) => listener(sessions));
   }
+  function showBackendWarning(error) {
+    if (backendWarningShown) return;
+    backendWarningShown = true;
+    toast(`Backend sync failed: ${error.message}`, "bad");
+  }
+  async function syncFromServer() {
+    if (syncInFlight) return;
+    syncInFlight = true;
+    const requestVersion = localMutationVersion;
+    try {
+      const response = await fetch("/api/sessions");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const remote = await response.json();
+      if (!remote || typeof remote !== "object" || Array.isArray(remote))
+        throw new Error("The server returned invalid session data.");
+      if (requestVersion !== localMutationVersion) return;
+      const local = read(),
+        merged = { ...local, ...remote };
+      if (JSON.stringify(local) !== JSON.stringify(merged)) {
+        localStorage.setItem(key, JSON.stringify(merged));
+        channel?.postMessage("updated");
+        listeners.forEach((listener) => listener(merged));
+      }
+      backendWarningShown = false;
+    } catch (error) {
+      showBackendWarning(error);
+    } finally {
+      syncInFlight = false;
+    }
+  }
+  async function saveToServer(id, patch) {
+    try {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      backendWarningShown = false;
+    } catch (error) {
+      showBackendWarning(error);
+    }
+  }
   function update(id, patch) {
     try {
       const sessions = read(),
         old = sessions[id] || {};
+      localMutationVersion++;
       sessions[id] = { ...old, ...patch, sessionId: id, updatedAt: Date.now() };
       const entries = Object.entries(sessions)
         .sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0))
@@ -198,6 +303,7 @@ const liveSessions = (() => {
       localStorage.setItem(key, JSON.stringify(Object.fromEntries(entries)));
       channel?.postMessage("updated");
       notify();
+      void saveToServer(id, patch);
       return sessions[id];
     } catch (error) {
       toast(`Live session could not be shared: ${error.message}`, "bad");
@@ -207,6 +313,10 @@ const liveSessions = (() => {
   function subscribe(listener) {
     listeners.add(listener);
     listener(read());
+    if (!syncTimer) {
+      void syncFromServer();
+      syncTimer = setInterval(syncFromServer, 1000);
+    }
     const onStorage = (event) => {
       if (event.key === key) listener(read());
     };
@@ -215,12 +325,25 @@ const liveSessions = (() => {
     channel?.addEventListener("message", onMessage);
     return () => {
       listeners.delete(listener);
+      if (!listeners.size && syncTimer) {
+        clearInterval(syncTimer);
+        syncTimer = null;
+      }
       removeEventListener("storage", onStorage);
       channel?.removeEventListener("message", onMessage);
     };
   }
   return { read, update, subscribe };
 })();
+
+async function getRtcConfiguration() {
+  const response = await fetch("/api/rtc-config");
+  if (!response.ok) throw new Error(`RTC configuration unavailable (HTTP ${response.status})`);
+  const configuration = await response.json();
+  if (!Array.isArray(configuration.iceServers))
+    throw new Error("The server returned invalid RTC configuration.");
+  return { iceServers: configuration.iceServers };
+}
 function eventData(event, index) {
   if (Array.isArray(event))
     return {

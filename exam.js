@@ -1,8 +1,10 @@
-const user = JSON.parse(
-  sessionStorage.getItem("candidate") ||
-    '{"name":"Demo Candidate","exam":"EX-2026"}',
-);
-const examDetails = examCatalog.find(user.exam) || examCatalog.find("EX-2026");
+const user = JSON.parse(sessionStorage.getItem("candidate") || "{}");
+const examDetails = examCatalog.find(user.exam);
+if (!examDetails || !user.accessGranted) {
+  location.replace("index.html#access");
+  throw new Error("Open an assessment using your individual invitation.");
+}
+const questionSet = examDetails.questions;
 user.sessionId =
   user.sessionId ||
   (crypto.randomUUID
@@ -149,7 +151,7 @@ async function handleCandidateVideoWatch(videoWatch) {
     return;
   candidateWatchId = videoWatch.id;
   try {
-    const peer = new RTCPeerConnection({ iceServers: [] });
+    const peer = new RTCPeerConnection(await getRtcConfiguration());
     candidateWatchPeer = peer;
     cameraStream
       .getVideoTracks()
@@ -168,10 +170,10 @@ async function handleCandidateVideoWatch(videoWatch) {
     });
     if (!result)
       throw new Error(
-        "The video connection could not be shared in this browser.",
+        "The video connection could not be shared through the backend.",
       );
     renderVideoShareStatus(
-      "Your live video is available to the examiner tab in this browser. Select Stop sharing at any time.",
+      "Your live video is available to the examiner over a peer-to-peer connection. Select Stop sharing at any time.",
     );
     peer.addEventListener("connectionstatechange", () => {
       if (candidateWatchPeer !== peer) return;
@@ -203,7 +205,7 @@ function syncLiveSession() {
     connection: connectionState,
     faceCount,
     question: cur + 1,
-    total: questions.length,
+    total: questionSet.length,
     answered: Object.keys(answers).length,
     videoShareConsent: shareVideoConsent,
     events: liveSessions.read()[user.sessionId]?.events || [],
@@ -230,7 +232,7 @@ function addLiveEvent(label, severity) {
     connection: connectionState,
     faceCount,
     question: cur + 1,
-    total: questions.length,
+    total: questionSet.length,
     answered: Object.keys(answers).length,
     videoShareConsent: shareVideoConsent,
     events: events.slice(0, 50),
@@ -701,17 +703,17 @@ try {
         if (
           Number.isInteger(n) &&
           n >= 0 &&
-          n < questions.length &&
+          n < questionSet.length &&
           Number.isInteger(v) &&
           v >= 0 &&
-          v < questions[n].o.length
+          v < questionSet[n].o.length
         )
           answers[n] = v;
       });
     if (Array.isArray(saved.marked))
       marked = new Set(
         saved.marked.filter(
-          (i) => Number.isInteger(i) && i >= 0 && i < questions.length,
+          (i) => Number.isInteger(i) && i >= 0 && i < questionSet.length,
         ),
       );
     if (
@@ -768,7 +770,7 @@ function addEvent(label, sev) {
   saveProgress();
   addLiveEvent(label, sev);
   toast(
-    "Potential signal shared with the examiner dashboard in this browser. It is not sent to a remote server.",
+    "Potential signal shared with the examiner through the backend.",
     sev === "HIGH" ? "bad" : "warn",
   );
 }
@@ -874,11 +876,11 @@ liveSessions.subscribe((sessions) => {
   }
 });
 function showQ() {
-  const q = questions[cur];
-  $("#qCount").textContent = `Question ${cur + 1} of ${questions.length}`;
+  const q = questionSet[cur];
+  $("#qCount").textContent = `Question ${cur + 1} of ${questionSet.length}`;
   syncLiveSession();
   $("#qBox").innerHTML =
-    `<fieldset class="fade"><legend class="text-xl font-bold">${q.q}</legend>${q.o.map((o, i) => `<label class="flex items-center gap-3 card mt-3 cursor-pointer min-h-[44px]"><input type="radio" name="q" value="${i}" class="w-5 h-5" ${answers[cur] === i ? "checked" : ""}> ${o}</label>`).join("")}</fieldset>`;
+    `<fieldset class="fade"><legend class="text-xl font-bold">${escapeHTML(q.q)}</legend>${q.o.map((o, i) => `<label class="flex items-center gap-3 card mt-3 cursor-pointer min-h-[44px]"><input type="radio" name="q" value="${i}" class="w-5 h-5" ${answers[cur] === i ? "checked" : ""}> ${escapeHTML(o)}</label>`).join("")}</fieldset>`;
   $$("input[name=q]").forEach(
     (r) =>
       (r.onchange = () => {
@@ -889,12 +891,12 @@ function showQ() {
       }),
   );
   $("#prev").disabled = cur === 0;
-  $("#next").disabled = cur === questions.length - 1;
+  $("#next").disabled = cur === questionSet.length - 1;
   $("#mark").setAttribute("aria-pressed", marked.has(cur));
   drawNav();
 }
 function drawNav() {
-  $("#nav").innerHTML = questions
+  $("#nav").innerHTML = questionSet
     .map((_, i) => {
       const a = i in answers,
         m = marked.has(i);
@@ -927,7 +929,7 @@ $("#goExam").onclick = () => {
   $("#beaconHdr").hidden = false;
   renderVideoShareStatus(
     shareVideoConsent
-      ? "The examiner may watch your live video in this browser. You can stop sharing at any time."
+      ? "The examiner may watch your live video from another device. Video is sent peer-to-peer and is not recorded. You can stop sharing at any time."
       : "The examiner can see your camera status, but not your video.",
   );
   const examVideo = $("#examVideo");
@@ -985,11 +987,11 @@ addEventListener("pagehide", () => {
 /* ---------- Submit ---------- */
 const dlg = $("#dlg");
 $("#submit").onclick = () => {
-  const un = questions.length - Object.keys(answers).length;
-  $("#dlgT").textContent = "Finish this demo?";
+  const un = questionSet.length - Object.keys(answers).length;
+  $("#dlgT").textContent = "Finish this assessment?";
   $("#dlgP").textContent = un
-    ? `You have ${un} unanswered question(s). Finish this demo now? Your answers are not sent to an institution or saved on a server.`
-    : "Finish this demo now? Your answers are not sent to an institution or saved on a server.";
+    ? `You have ${un} unanswered question(s). Finish now? Your answers are shared with the examiner only in this browser.`
+    : "Finish now? Your answers are shared with the examiner only in this browser.";
   $("#dlgErr").textContent = "";
   dlg.showModal();
 };
@@ -1009,23 +1011,52 @@ function finish(result = "Completed") {
   syncLiveSession();
   sessionStorage.removeItem(progressKey);
   const n = Object.keys(answers).length,
+    scoredQuestions = questionSet.filter((question) =>
+      Number.isInteger(question.answer),
+    ),
+    correct = scoredQuestions.filter(
+      (question, index) =>
+        answers[questionSet.indexOf(question)] === question.answer,
+    ).length,
+    score =
+      scoredQuestions.length > 0
+        ? Math.round((100 * correct) / scoredQuestions.length)
+        : null,
     high = log.filter((l) => l[2] === "HIGH").length;
+  if (result === "Completed" && score !== null) {
+    liveSessions.update(user.sessionId, {
+      examResult: {
+        score,
+        correct,
+        total: scoredQuestions.length,
+        responses: questionSet.map((question, index) => ({
+          question: question.q,
+          answer:
+            Number.isInteger(answers[index]) && question.o[answers[index]]
+              ? question.o[answers[index]]
+              : "",
+        })),
+      },
+    });
+    $("#scoreSummary").hidden = false;
+    $("#scoreNum").textContent = `${score}% (${correct} of ${scoredQuestions.length} correct)`;
+  }
   $("#stageExam").hidden = true;
   $("#stageDone").hidden = false;
   $("#beaconHdr").hidden = true;
   $("#dTime").textContent = now();
-  $("#dAns").textContent = `${n} of ${questions.length}`;
-  $("#dUn").textContent = questions.length - n;
+  $("#dAns").textContent = `${n} of ${questionSet.length}`;
+  $("#dUn").textContent = questionSet.length - n;
   $("#doneStatus").textContent =
     result === "Disqualified"
       ? "Disqualified by examiner"
       : "Finished in this browser";
   $("#h-done").textContent =
-    result === "Disqualified" ? "Exam session ended" : "Demo exam complete";
+    result === "Disqualified" ? "Assessment session ended" : "Assessment complete";
   $("#dMsg").textContent =
     result === "Disqualified"
-      ? "Your examiner ended this exam session. Your answers were not sent to an institution or saved on a server."
-      : `Your answers were not sent to an institution or saved on a server.${high ? ` ${high} alert(s) were shared with the examiner tab in this browser.` : ""}`;
+      ? "Your examiner ended this assessment. Your answers remain in this browser."
+      : `Your answers were shared with the examiner through the backend.${high ? ` ${high} alert(s) were also recorded.` : ""}`;
   $("#dLog").innerHTML = log.length
     ? timelineHTML(log)
     : '<p class="mut">No alerts were recorded during this exam.</p>';

@@ -3,7 +3,6 @@ const page = document.body.dataset.page;
 $("#sideBtn").onclick = () => {
   $("#side").classList.toggle(innerWidth < 768 ? "open" : "expanded");
 };
-const f = { q: "", status: "all", sev: "all" };
 let liveCandidates = [],
   livePaused = false,
   selectedSessionId = new URLSearchParams(location.search).get("session"),
@@ -53,7 +52,6 @@ function renderStats() {
     ["Connected now", act],
     ["Taking an exam", running],
     ["Open alerts", openAlertCount],
-    ["Demo records", candidates.length],
     [
       "Internet OK",
       liveCandidates.filter((c) => c.connected && c.conn === "Connected")
@@ -107,26 +105,7 @@ function renderLiveGrid() {
 ${profileScores(c.total ? (100 * (Number(c.answered) || 0)) / Number(c.total) : 0, monitoringScore(c.events), 42)}</button>`;
         })
         .join("")
-    : '<div class="card text-center"><p class="font-bold">No candidates yet</p><p class="mut mt-1">Open the exam and this page in two tabs in the same browser.</p></div>';
-}
-function renderGrid() {
-  const list = candidates.filter(
-    (c) =>
-      `${c.name} ${c.status} ${c.conn} ${c.id}`.toLowerCase().includes(f.q) &&
-      (f.status === "all" || c.status === f.status),
-  );
-  $("#grid").innerHTML = list.length
-    ? list
-        .map(
-          (
-            c,
-          ) => `<article class="card"><div class="cam mb-3" style="aspect-ratio:16/7"><div class="camfb">${c.cam ? "Camera preview (simulated)" : "No camera signal"}</div></div>
-<div class="flex justify-between items-start gap-2"><div><h3 class="font-bold text-lg">${escapeHTML(c.name)}</h3>${badge(...ST[c.status])}</div>${profileScores((100 * c.q) / c.total, c.score, 42, "Question position")}</div>
-<p class="mut text-xs mt-2">Sample monitoring score; not live AI.</p>
-<p class="mut text-sm mt-2">Sample question ${c.q}/${c.total} · Sample connection: ${c.conn}</p><a class="btn btn-p w-full mt-3" href="candidate.html?id=${c.id}" aria-label="View sample record for ${escapeHTML(c.name)}">View sample record</a></article>`,
-        )
-        .join("")
-    : '<div class="card sm:col-span-2 text-center"><p class="font-bold">No candidates match</p><p class="mut">Try a different name or clear the status filter.</p></div>';
+    : '<div class="card text-center"><p class="font-bold">No candidates yet</p><p class="mut mt-1">Open the candidate exam and examiner page using the same backend server URL.</p></div>';
 }
 function renderSignals(c) {
   const events = eventList(c)
@@ -164,7 +143,7 @@ function renderWatchPanel(c) {
     : canWatch
       ? "Watch live"
       : "Not available yet";
-  return `<section class="watch-panel mt-5" aria-label="Live candidate video"><div class="watch-header"><div><h2 class="font-bold">Candidate video</h2><p class="mut text-sm" data-watch-status>${escapeHTML(status)}</p></div><span class="watch-indicator ${connected ? "watching" : ""}" aria-hidden="true"></span></div><div class="watch-video-wrap"><video id="watchVideo" autoplay muted playsinline aria-label="Candidate live camera video" hidden></video><p class="watch-placeholder">${allowed ? "Video is off until you start watching." : "The candidate must allow video sharing first."}</p></div><button class="btn ${connected ? "" : "btn-p"} mt-3" type="button" data-watch-session="${escapeHTML(c.sessionId)}" ${!connected && !canWatch ? "disabled" : ""}>${action}</button><p class="mut text-xs mt-2">Only available with the candidate’s consent, in another tab on this browser. Video is not saved or sent to a server.</p></section>`;
+  return `<section class="watch-panel mt-5" aria-label="Live candidate video"><div class="watch-header"><div><h2 class="font-bold">Candidate video</h2><p class="mut text-sm" data-watch-status>${escapeHTML(status)}</p></div><span class="watch-indicator ${connected ? "watching" : ""}" aria-hidden="true"></span></div><div class="watch-video-wrap"><video id="watchVideo" autoplay muted playsinline aria-label="Candidate live camera video" hidden></video><p class="watch-placeholder">${allowed ? "Video is off until you start watching." : "The candidate must allow video sharing first."}</p></div><button class="btn ${connected ? "" : "btn-p"} mt-3" type="button" data-watch-session="${escapeHTML(c.sessionId)}" ${!connected && !canWatch ? "disabled" : ""}>${action}</button><p class="mut text-xs mt-2">Live peer-to-peer video requires the candidate’s consent. The backend handles connection signaling; video is not recorded or uploaded.</p></section>`;
 }
 function attachWatchVideo() {
   const video = $("#watchVideo");
@@ -228,7 +207,7 @@ async function startWatching(sessionId) {
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   try {
-    const peer = new RTCPeerConnection({ iceServers: [] });
+    const peer = new RTCPeerConnection(await getRtcConfiguration());
     watchPeer = peer;
     watchSessionId = sessionId;
     watchRequestId = id;
@@ -254,7 +233,7 @@ async function startWatching(sessionId) {
       ) {
         if (peer.connectionState === "failed")
           toast(
-            "The live video connection failed. Check that both tabs are open in this browser.",
+            "The live video connection failed. Check both devices’ network access and TURN configuration on the backend.",
             "bad",
           );
         if (watchPeer === peer) {
@@ -280,7 +259,7 @@ async function startWatching(sessionId) {
       },
     });
     if (!result)
-      throw new Error("The video request could not be shared in this browser.");
+      throw new Error("The video request could not be shared through the backend.");
     refreshExaminerView();
   } catch (error) {
     if (watchPeer) stopWatching(sessionId);
@@ -394,7 +373,7 @@ function renderSelectedPanel() {
 <div class="profile-summary"><h3 class="font-bold">Candidate scores</h3>${profileScores(c.total ? (100 * (Number(c.answered) || 0)) / Number(c.total) : 0, monitoringScore(c.events), 56)}<p class="mut text-xs">Monitor score starts at 100: LOW -3, MEDIUM -10, HIGH -25. Dismissed false positives do not count. It is not a grade or proof of misconduct.</p></div>
 <div class="session-facts mt-4"><p><span>Browser</span>${c.status === "Left" ? badge("warn", "Left") : c.connected ? badge("ok", "Connected") : badge("bad", "No update")}</p><p><span>Internet</span>${network}</p><p><span>Question</span><strong>${Number(c.question) || 0} of ${Number(c.total) || 0}</strong></p><p><span>Camera</span><strong>${c.camera ? (c.videoShareConsent ? "On · sharing allowed" : "On · private") : "Off"}</strong></p><p><span>Face check</span><strong>${c.ai ? "Running" : "Off"}</strong></p><p><span>Faces seen</span><strong>${Number.isInteger(c.faceCount) ? c.faceCount : "—"}</strong></p></div>
 <section class="examiner-actions mt-5" aria-label="Examiner actions"><h2 class="font-bold">Examiner actions</h2><p class="mut text-sm mt-1">Time extension is 25 seconds. Camera access always needs the candidate’s response.</p><div class="flex flex-wrap gap-2 mt-3"><button class="btn" type="button" data-session-action="request-camera" data-session-id="${escapeHTML(c.sessionId)}" ${!inExam ? "disabled" : ""}>Ask candidate to open camera</button><button class="btn" type="button" data-session-action="add-time" data-session-id="${escapeHTML(c.sessionId)}" ${!inExam ? "disabled" : ""}>Add 25 seconds</button><button class="btn" type="button" data-session-action="disqualify" data-session-id="${escapeHTML(c.sessionId)}" ${!canManage ? "disabled" : ""}>Disqualify candidate</button></div><p class="mut text-sm mt-2">${escapeHTML(cameraRequestStatus)}${Number(c.timeGrantedSeconds) > 0 ? ` ${Number(c.timeGrantedSeconds)} seconds added so far.` : ""}</p></section>
-${renderWatchPanel(c)}${renderHelpRequest(c)}${renderSignals(c)}<p class="mut text-xs mt-5">Session updates are shared only between tabs open in this browser and site.</p>`;
+${renderWatchPanel(c)}${renderHelpRequest(c)}${renderSignals(c)}<p class="mut text-xs mt-5">Session details are synchronized through the backend. Video is sent peer-to-peer only when the candidate consents.</p>`;
   attachWatchVideo();
   draftNotes.forEach((value, id) => {
     const field = $$("[data-event-note]", panel).find(
@@ -418,7 +397,6 @@ function refresh() {
     selectedSessionId = liveCandidates[0]?.sessionId || null;
   renderStats();
   renderLiveGrid();
-  renderGrid();
   renderSelectedPanel();
 }
 function exportReport() {
@@ -429,9 +407,9 @@ function exportReport() {
       "Candidate",
       "Status",
       "Question progress",
-      "Internet or sample connection",
+      "Internet connection",
       "Camera",
-      "Sample score",
+      "Assessment score",
       "Recorded signals",
     ],
   ];
@@ -447,20 +425,8 @@ function exportReport() {
           ? "On, sharing allowed"
           : "On, private"
         : "Off",
-      "",
+      c.examResult?.score == null ? "" : `${c.examResult.score}%`,
       (c.events || []).length,
-    ]),
-  );
-  candidates.forEach((c) =>
-    rows.push([
-      "Sample",
-      c.name,
-      c.status,
-      `${c.q}/${c.total}`,
-      c.conn,
-      c.cam ? "Simulated on" : "No signal",
-      `${c.score}%`,
-      c.events.length,
     ]),
   );
   rows.push([]);
@@ -484,13 +450,6 @@ function exportReport() {
       ]),
     ),
   );
-  candidates.forEach((c) =>
-    c.events
-      .filter((e) => e[1] !== "Normal activity")
-      .forEach(([time, label, severity]) =>
-        rows.push([c.name, time, label, severity, "Sample event", ""]),
-      ),
-  );
   const csv =
     "\uFEFF" + rows.map((row) => row.map(quote).join(",")).join("\r\n");
   const url = URL.createObjectURL(
@@ -506,20 +465,11 @@ function exportReport() {
   toast("Monitoring report downloaded.", "ok");
 }
 if (page === "dashboard") {
-  $("#grid").innerHTML = '<div class="skel"></div><div class="skel"></div>';
   $("#liveGrid").innerHTML = '<div class="skel"></div>';
   $("#stats").innerHTML =
     '<div class="skel col-span-full" role="status" aria-label="Loading candidates…"></div>';
   $("#selectedPanel").innerHTML = '<div class="skel"></div>';
   setTimeout(refresh, 100);
-  $("#search").oninput = (e) => {
-    f.q = e.target.value.toLowerCase();
-    renderGrid();
-  };
-  $("#statusF").onchange = (e) => {
-    f.status = e.target.value;
-    renderGrid();
-  };
   $("#export").onclick = exportReport;
   $("#pause").onclick = (e) => {
     livePaused = !livePaused;
@@ -554,28 +504,6 @@ if (page === "dashboard") {
     refresh();
   });
   $("#selectedPanel").addEventListener("submit", saveSignalReview);
-  $("#createTestForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const name = $("#testName").value.trim(),
-      minutes = Number($("#testDuration").value),
-      message = $("#createdTest");
-    if (!name || !Number.isInteger(minutes) || minutes < 1 || minutes > 240) {
-      message.textContent =
-        "Enter a test name and a duration from 1 to 240 minutes.";
-      message.className = "err mt-3";
-      return;
-    }
-    const test = examCatalog.create(name, minutes);
-    if (!test) {
-      message.textContent =
-        "The test could not be created. Check browser storage and try again.";
-      message.className = "err mt-3";
-      return;
-    }
-    message.innerHTML = `Created <strong>${escapeHTML(test.name)}</strong> · ${minutes} minutes. Share test ID <code>${escapeHTML(test.id)}</code> with candidates.`;
-    message.className = "mut text-sm mt-3";
-    $("#testName").value = "";
-  });
   $("#selectedPanel").addEventListener("click", (event) => {
     acknowledgeHelp(event);
     const action = event.target.closest("[data-session-action]");
@@ -809,7 +737,7 @@ ${renderWatchPanel(c)}
 <section class="card lg:col-span-2" aria-labelledby="h-t"><h2 id="h-t" class="text-xl font-bold">Exam updates</h2>
 <p class="mut text-sm mb-4">These alerts are suggestions to check. They are not proof that a rule was broken.</p>
 ${events.length ? timelineHTML(events) : '<p class="mut">No alerts yet.</p>'}
-<p class="mut text-xs mt-4">This demo shares details between tabs in this browser only. Live video needs the candidate’s consent and is not sent to a server.</p></section></div>`;
+<p class="mut text-xs mt-4">Session details are synchronized through the backend. Live video needs the candidate’s consent and is sent peer-to-peer, not to the server.</p></section></div>`;
     $("#detail").insertAdjacentHTML(
       "beforeend",
       `${renderHelpRequest(c)}${renderSignals(c)}`,
@@ -846,32 +774,7 @@ ${events.length ? timelineHTML(events) : '<p class="mut">No alerts yet.</p>'}
     else void startWatching(button.dataset.watchSession);
     renderLiveDetail();
   });
-} else if (
-  page === "candidate" &&
-  new URLSearchParams(location.search).has("id")
-) {
-  const c = candidates.find(
-    (x) => x.id == new URLSearchParams(location.search).get("id"),
-  );
-  setTimeout(() => {
-    if (!c) {
-      $("#detail").innerHTML =
-        '<div class="card text-center"><p class="font-bold">Candidate not found</p><a class="btn btn-p mt-3" href="dashboard.html">Back to dashboard</a></div>';
-      return;
-    }
-    $("#title").textContent = `${c.name} · Sample record`;
-    document.title = c.name + " – Sample record";
-    $("#detail").innerHTML =
-      `<div class="grid lg:grid-cols-3 gap-6"><div class="space-y-4"><div class="cam"><div class="camfb">${c.cam ? "Camera preview (simulated)" : "No camera signal"}</div></div>
-<div class="card"><h2 class="font-bold">Candidate scores</h2>${profileScores((100 * c.q) / c.total, c.score, 52, "Question position")}<p class="mut text-xs mt-2">Both scores are sample values. The monitoring score is not generated by live AI.</p></div>
-<div class="card"><h2 class="font-bold mb-2">Candidate</h2><dl class="space-y-1 text-sm"><div class="flex justify-between"><dt class="mut">Status</dt><dd>${badge(...ST[c.status])}</dd></div><div class="flex justify-between"><dt class="mut">Current question</dt><dd class="font-bold">${c.q}/${c.total}</dd></div>
-<div class="flex justify-between"><dt class="mut">Camera</dt><dd>${c.cam ? badge("warn", "Simulated") : badge("off", "No signal")}</dd></div>
-<div class="flex justify-between"><dt class="mut">Microphone</dt><dd>${badge("off", "Not used")}</dd></div>
-<div class="flex justify-between"><dt class="mut">Connection</dt><dd>${badge("off", `Sample: ${c.conn}`)}</dd></div></dl></div>
-<div class="card"><strong>Sample record</strong><p class="mut text-sm mt-1">This record is illustrative. No candidate is connected, and no examiner action is sent.</p></div></div>
-<section class="card lg:col-span-2" aria-labelledby="h-t"><h2 id="h-t" class="text-xl font-bold">Sample activity timeline</h2><p class="mut text-sm mb-4">Illustrative events only. They were not detected during a real exam.</p>${timelineHTML(c.events)}</section></div>`;
-  }, 700);
 } else if (page === "candidate") {
   $("#detail").innerHTML =
-    '<div class="card"><h2 class="font-bold">Choose a candidate record</h2><p class="mut mt-2">Open a live session or sample record from the examiner dashboard.</p><a class="btn btn-p mt-3" href="dashboard.html">Open examiner dashboard</a></div>';
+    '<div class="card"><h2 class="font-bold">Select a student session</h2><p class="mut mt-2">Choose an active or recent student from the examiner workspace.</p><a class="btn btn-p mt-3" href="dashboard.html">Open examiner workspace</a></div>';
 }

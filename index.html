@@ -8,7 +8,7 @@
       name="description"
       content="An online exam demo with optional camera checks and a clear candidate and examiner view."
     />
-    <title>Verity — Online exam demo</title>
+    <title>Independent Exam Workspace</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -22,10 +22,10 @@
     <a class="skip" href="#main">Skip to content</a>
     <header class="site-header editorial-header">
       <nav aria-label="Main" class="editorial-nav max-w-6xl mx-auto px-4">
-        <a class="wordmark" href="index.html" aria-label="Verity home"
-          ><span class="wordmark-mark" aria-hidden="true">v.</span
+        <a class="wordmark" href="index.html" aria-label="Exam workspace home"
+          ><span class="wordmark-mark" aria-hidden="true">e.</span
           ><span
-            >verity<span class="wordmark-reg"> / EXAMINATIONS</span></span
+            >exam workspace<span class="wordmark-reg"> / ASSESSMENTS</span></span
           ></a
         >
         <button
@@ -63,7 +63,7 @@
       <section class="editorial-hero">
         <div class="hero-inner">
           <div class="hero-copy">
-            <p class="issue-label"><span></span> ONLINE EXAM DEMO</p>
+            <p class="issue-label"><span></span> INDEPENDENT ASSESSMENT SPACE</p>
             <h1 class="page-title">
               A clear, fair<br />way to take<br /><em>an exam.</em>
             </h1>
@@ -82,8 +82,8 @@
             <div class="hero-footnote">
               <span class="handdrawn-check" aria-hidden="true">✓</span
               ><span
-                ><strong>Your camera is optional.</strong><br />Nothing is sent
-                to an examiner as video.</span
+                >                <strong>Your camera is optional.</strong><br />Live video is
+                shared only with your consent.</span
               >
             </div>
           </div>
@@ -173,9 +173,11 @@
               browser can watch your video.
             </p>
             <p>
-              This demo shares exam status and possible alerts between tabs in
-              the same browser. It does not connect to a remote examiner. Alerts
-              can be wrong, so an examiner should review them before acting.
+              Exam status and possible alerts are shared between tabs in the
+              through the backend to examiner devices. Live video is shared
+              peer-to-peer only after consent and is not recorded.
+              Alerts can be wrong, so an examiner should review them before
+              acting.
             </p>
             <a class="editorial-inline-link" href="dashboard.html"
               >Open the examiner view <span aria-hidden="true">↗</span></a
@@ -200,8 +202,8 @@
             <div>
               <h3>Take the exam</h3>
               <p>
-                Your timer, answers, and question list stay together on the
-                screen.
+                Your assigned questions, answers, and timer stay together on
+                the screen.
               </p>
             </div>
             <span class="experience-glyph" aria-hidden="true">2</span>
@@ -211,8 +213,7 @@
             <div>
               <h3>Review alerts</h3>
               <p>
-                Alerts are only suggestions to check. This demo does not connect
-                to a remote examiner or server.
+                Alerts are prompts for human review, not proof of misconduct.
               </p>
             </div>
             <span class="experience-glyph" aria-hidden="true">3</span>
@@ -225,8 +226,8 @@
           <p class="section-kicker">CANDIDATE</p>
           <h2>Start your<br /><em>exam here.</em></h2>
           <p>
-            Enter the details from your exam invitation. You can check your
-            setup before the exam starts.
+            Enter your invitation details. Your examiner must assign you to the
+            test and provide your individual access code.
           </p>
           <div class="access-aside-note">
             <span aria-hidden="true">↗</span
@@ -240,13 +241,13 @@
         </div>
         <div class="access-paper">
           <div class="form-heading">
-            <span class="form-overline">EXAM DETAILS</span
+            <span class="form-overline">STUDENT ACCESS</span
             ><span class="form-lock" aria-hidden="true">⌑</span>
           </div>
           <h3>Enter your details</h3>
           <p class="form-description">
-            Enter the test ID given by your examiner and any code with 4 or more
-            characters. The default demo test is <code>EX-2026</code>.
+            Enter the test ID and individual access code provided by your
+            examiner.
           </p>
           <form id="accessForm" class="editorial-form" novalidate>
             <div class="editorial-field">
@@ -266,7 +267,7 @@
               ><input
                 id="exam"
                 class="input"
-                placeholder="EX-2026"
+                placeholder="Test ID"
                 required
                 aria-describedby="e-exam"
               />
@@ -280,7 +281,7 @@
                   type="password"
                   class="input"
                   autocomplete="off"
-                  placeholder="4 or more characters"
+                  placeholder="Your individual code"
                   required
                   aria-describedby="e-code"
                 /><button
@@ -297,7 +298,7 @@
             </div>
             <div class="editorial-field">
               <label for="inst"
-                >School or institution <span>OPTIONAL</span></label
+                >Organization <span>OPTIONAL</span></label
               ><input
                 id="inst"
                 class="input"
@@ -306,8 +307,8 @@
               />
             </div>
             <p class="editorial-assurance">
-              <span aria-hidden="true">✓</span> Camera use and live video
-              sharing are your choice. Video is not saved or sent to a server.
+              <span aria-hidden="true">✓</span> Camera and live video sharing
+              are optional. Live video is peer-to-peer and is not recorded.
             </p>
             <button class="editorial-cta form-submit" type="submit">
               Check my setup <span aria-hidden="true">↗</span>
@@ -320,18 +321,18 @@
     <footer class="editorial-footer">
       <div class="footer-main">
         <a class="wordmark" href="index.html"
-          ><span class="wordmark-mark" aria-hidden="true">v.</span
-          ><span>verity<span class="wordmark-reg"> / EXAMS</span></span></a
+          ><span class="wordmark-mark" aria-hidden="true">e.</span
+          ><span>exam workspace<span class="wordmark-reg"> / ASSESSMENTS</span></span></a
         >
-        <p>An exam demo that keeps your video private.</p>
+        <p>A browser-based workspace for independent assessments.</p>
         <span class="footer-classification"
-          >DEMO SITE<br />NO SCHOOL OR SERVER CONNECTED</span
+          >LIVE EXAM DEMO<br />BACKEND CONNECTED</span
         >
       </div>
       <div class="footer-bottom">
-        <span>VERITY · EXAM DEMO</span
+        <span>INDEPENDENT EXAM WORKSPACE</span
         ><span
-          >Session details are shared only between tabs in this browser.</span
+          >Session details use the backend; video is never recorded.</span
         ><a href="#main">Back to top ↑</a>
       </div>
     </footer>
@@ -343,11 +344,11 @@
         exam: (v) =>
           examCatalog.find(v)
             ? ""
-            : "Enter a test ID created by your examiner, or use EX-2026.",
+            : "Enter a test ID created by your examiner.",
         code: (v) =>
-          v.trim().length >= 4
+          examCatalog.authorize($("#exam").value, $("#name").value, v)
             ? ""
-            : "Access code must be at least 4 characters.",
+            : "The test ID, student name, and individual access code do not match.",
       };
       $("#toggleCode").addEventListener("click", (e) => {
         const input = $("#code"),
@@ -376,6 +377,7 @@
           JSON.stringify({
             name: $("#name").value.trim(),
             exam: $("#exam").value.trim().toUpperCase(),
+            accessGranted: true,
           }),
         );
         location.href = "exam.html";

@@ -108,7 +108,7 @@ function renderLeaderboard() {
           return `<tr><td class="leaderboard-rank">${index + 1}</td><td>${leaderboardScore(candidate.rankIndex)}</td><th scope="row"><span class="leaderboard-name">${escapeHTML(candidate.name)}</span><span class="leaderboard-exam">${escapeHTML(candidate.exam || "")}</span></th><td>${leaderboardScore(candidate.score)}</td><td><div class="leaderboard-progress"><span>${candidate.answered} / ${candidate.total} answered</span><span class="leaderboard-meter" role="progressbar" aria-label="${escapeHTML(candidate.name)} exam progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${candidate.progress}"><i style="width:${candidate.progress}%"></i></span></div></td><td>${leaderboardBadge(candidate.openAlerts ? "warn" : "off", String(candidate.openAlerts))}</td><td>${escapeHTML(camera)}<span class="leaderboard-sub">${escapeHTML(faceCheck)}</span></td><td>${network}</td><td>${candidateStatus(candidate)}</td><td class="mono mut">${new Date(candidate.updatedAt).toLocaleTimeString()}</td></tr>`;
         })
         .join("")
-    : '<tr><td colspan="10" class="leaderboard-empty"><strong>No live candidate sessions yet.</strong><span>Open the candidate exam and this page in tabs in the same browser to populate the rankings.</span><a class="btn btn-p mt-3" href="exam.html">Open candidate exam demo</a></td></tr>';
+    : '<tr><td colspan="10" class="leaderboard-empty"><strong>No live candidate sessions yet.</strong><span>Open the candidate exam and examiner pages using the same backend server to populate the rankings.</span><a class="btn btn-p mt-3" href="exam.html">Open candidate exam demo</a></td></tr>';
 }
 renderLeaderboard();
 liveSessions.subscribe(renderLeaderboard);
